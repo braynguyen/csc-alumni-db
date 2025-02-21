@@ -1,14 +1,13 @@
 from database import get_db_connection, initialize_tables
 from fastapi import FastAPI
-from contextlib import asynccontextmanager
 from pydantic import BaseModel
-import sqlite3
+import datetime
 
 # creating global reqs
 app = FastAPI()
 initialize_tables()
 
-
+# dumb af but makes testing quicker
 @app.get("/restart")
 def clean_up():
     conn = get_db_connection()
@@ -25,8 +24,61 @@ def clean_up():
 
     initialize_tables()
 
-# class Company(BaseModel):
-#     name: str
+    return "reset all tables"
+
+class Interview(BaseModel):
+    company: str
+    pittId: str
+    date: str
+    role: str
+
+class Member(BaseModel):
+    pittId: str
+    fname: str
+    lname: str
+    gradDate: str
+    location: str
+    company: str
+class Company(BaseModel):
+    name: str
+
+@app.get("/interviews")
+def get_interviews():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM interviews")
+    items = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return items
+
+@app.post("/interviews")
+def create_interview(interview: Interview):
+    # create company if it does not exist in the database
+    # needs to come before interview to satisfy foreign key
+    if not get_company(interview.company):
+        create_company(Company(name=interview.company))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # dates are stored in 'YYYY-MM-DD' format
+    date_object = datetime.datetime.strptime(interview.date, '%Y-%m-%d')
+    interview.date = date_object.strftime('%Y-%m-%d')
+
+    # values should sanitize input
+    cursor.execute(
+        "INSERT INTO interviews (company, pittId, date, role) VALUES (?, ?, ?, ?)", 
+        (interview.company, interview.pittId, interview.date, interview.role)
+    )
+    conn.commit()
+    conn.close()
+
+    return {
+        "company": interview.company,
+        "pittId": interview.pittId,
+        "date": interview.date,
+        "role": interview.role,
+    }
 
 @app.get("/companies/{company_name}")
 def get_company(company_name: str):
@@ -50,29 +102,23 @@ def get_companies():
     return items
 
 @app.post("/companies")
-def create_company(company: str):
+def create_company(company: Company):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     # values should sanitize input
     cursor.execute(
         "INSERT INTO companies (name) VALUES (?)", 
-        (company,)
+        (company.name,)
     )
     conn.commit()
     conn.close()
 
     return {
-        "name": company
+        "name": company.name
     }
 
-class Member(BaseModel):
-    pitt_id: str
-    fname: str
-    lname: str
-    grad_date: str
-    location: str
-    company: str
+
 
 @app.get("/members")
 def get_members():
@@ -88,24 +134,27 @@ def create_member(member: Member):
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # dates are stored in 'YYYY-MM-DD' format
+    date_object = datetime.datetime.strptime(member.gradDate, '%Y-%m-%d')
+    member.gradDate = date_object.strftime('%Y-%m-%d')
+
     # values should sanitize input
     cursor.execute(
         "INSERT INTO members (pittId, fname, lname, gradDate, location, company) VALUES (?, ?, ?, ?, ?, ?)", 
-        (member.pitt_id, member.fname, member.lname, member.grad_date, member.location, member.company)
+        (member.pittId, member.fname, member.lname, member.gradDate, member.location, member.company)
     )
     conn.commit()
     conn.close()
 
-
     # create company if it does not exist in the database
     if not get_company(member.company):
-        create_company(member.company)
+        create_company(Company(name=member.company))
 
     return {
-        "pittId": member.pitt_id,
+        "pittId": member.pittId,
         "fname": member.fname,
         "lname": member.lname,
-        "gradDate": member.grad_date,
+        "gradDate": member.gradDate,
         "location": member.location,
         "company": member.company
     }
