@@ -1,9 +1,12 @@
 from database import get_db_connection, initialize_tables
-from fastapi import FastAPI
+from fastapi.security import OAuth2PasswordBearer
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 import datetime
 
+
 # creating global reqs
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 app = FastAPI()
 initialize_tables()
 
@@ -26,6 +29,7 @@ def clean_up():
 
     return "reset all tables"
 
+# defining models
 class Interview(BaseModel):
     company: str
     pittId: str
@@ -39,9 +43,12 @@ class Member(BaseModel):
     gradDate: str
     location: str
     company: str
+
 class Company(BaseModel):
     name: str
 
+
+# Interviews
 @app.get("/interviews")
 def get_interviews():
     conn = get_db_connection()
@@ -80,6 +87,8 @@ def create_interview(interview: Interview):
         "role": interview.role,
     }
 
+
+# Companies
 @app.get("/companies/{company_name}")
 def get_company(company_name: str):
     conn = get_db_connection()
@@ -118,8 +127,7 @@ def create_company(company: Company):
         "name": company.name
     }
 
-
-
+#Members
 @app.get("/members")
 def get_members():
     conn = get_db_connection()
@@ -158,3 +166,8 @@ def create_member(member: Member):
         "location": member.location,
         "company": member.company
     }
+
+
+# login
+async def check_login(request: Request, call_next):
+    pass
